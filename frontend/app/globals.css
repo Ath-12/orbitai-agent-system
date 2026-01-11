@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+:root {
+  /* ✅ LIGHT MODE: Warm Stone + Black Accents */
+  --background: #fafaf9; /* Stone 50 */
+  --foreground: #0c0a09; /* Stone 950 */
+  
+  --card: #ffffff;
+  --card-foreground: #0c0a09;
+  
+  /* Buttons are now BLACK in light mode for max contrast */
+  --primary: #18181b; 
+  --primary-foreground: #ffffff;
+  
+  --secondary: #e7e5e4;
+  --secondary-foreground: #1c1917;
+  
+  --muted: #f5f5f4;
+  --muted-foreground: #78716c;
+  
+  --accent: #f5f5f4;
+  --accent-foreground: #1c1917;
+  
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --border: #d6d3d1;
+  --input: #d6d3d1;
+  --ring: #18181b;
+  
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(28, 25, 23, 0.08);
+}
+
+.dark {
+  /* ✅ DARK MODE: True Black + Blue Accents */
+  --background: #000000;
+  --foreground: #fafafa;
+  
+  --card: #09090b;
+  --card-foreground: #fafafa;
+  
+  /* Buttons remain Blue in dark mode for that Cyber look */
+  --primary: #3b82f6; 
+  --primary-foreground: #ffffff;
+  
+  --secondary: #18181b;
+  --secondary-foreground: #fafafa;
+  
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  
+  --accent: #18181b;
+  --accent-foreground: #fafafa;
+  
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fafafa;
+  
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #3b82f6;
+
+  --glass-bg: rgba(10, 10, 10, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.12);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  transition: background-color 0.5s ease, color 0.5s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  /* Light Mode: Subtle Warm Glow */
+  background: 
+    radial-gradient(circle at 10% 20%, rgba(255, 0, 0, 0.03), transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(0, 0, 255, 0.03), transparent 40%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.dark body::before {
+  /* Dark Mode: Stealth Blue Glow */
+  background: 
+    radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.15), transparent 50%);
+}
+
+@layer utilities {
+  .glass-panel {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.05);
+  }
+}
