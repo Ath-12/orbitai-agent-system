@@ -34,3 +34,9 @@ dist/
 build/
 .next/
 out/
+
+# =========================
+# Local-only files
+# =========================
+automation/n8n/n8n-data/
+*.patch
