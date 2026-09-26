@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+/* Tailwind v4 only creates color classes (bg-primary, text-muted-foreground,
+   border-border, ...) for colors listed here. Without this block those classes
+   silently did nothing, so buttons had no background and the progress bar
+   was invisible. The values come from the light/dark variables below. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
 :root {
   /* ✅ LIGHT MODE: Warm Stone + Black Accents */
   --background: #fafaf9; /* Stone 50 */
