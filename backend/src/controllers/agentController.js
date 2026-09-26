@@ -3,7 +3,8 @@ const supabase = require("../services/supabaseClient");
 const observe = require("../agent/observe"); // ✅ Import the working observe logic
 
 const runAgent = async (req, res) => {
-  const { userId, runType, userQuery } = req.body;
+  const userId = req.userId; // from the verified login token
+  const { userQuery } = req.body;
 
   console.log(`🤖 Agent triggered for User: ${userId}`);
 
@@ -60,7 +61,7 @@ const runAgent = async (req, res) => {
 };
 
 const getAgentState = async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.userId; // from the verified login token
 
   try {
     // ✅ FIX: Use 'observe' to fetch state. 

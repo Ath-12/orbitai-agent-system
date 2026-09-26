@@ -3,15 +3,16 @@ const router = express.Router();
 
 const supabaseClient = require("../services/supabaseClient");
 const supabase = supabaseClient.supabase || supabaseClient;
+const requireUser = require("../middleware/requireUser");
 
 /**
  * Complete a task
  * POST /tasks/:taskId/complete
  */
-router.post("/:taskId/complete", async (req, res) => {
+router.post("/:taskId/complete", requireUser, async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { userId } = req.body;
+    const userId = req.userId; // from the verified login token
 
     if (!taskId || !userId) {
       return res.status(400).json({ error: "taskId and userId are required" });
