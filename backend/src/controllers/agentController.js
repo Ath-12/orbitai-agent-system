@@ -1,59 +1,42 @@
 const { runAgentLoop } = require("../services/agentService");
 const supabase = require("../services/supabaseClient");
 const observe = require("../agent/observe"); // ✅ Import the working observe logic
+const { getActiveGoal, startNewGoal } = require("../services/goalService");
 
 const runAgent = async (req, res) => {
   const userId = req.userId; // from the verified login token
-  const { userQuery } = req.body;
+  const userQuery = (req.body.userQuery || "").trim();
 
   console.log(`🤖 Agent triggered for User: ${userId}`);
 
   try {
-    if (userQuery) {
-      console.log(`📝 Received User Command: "${userQuery}"`);
+    const existingGoal = await getActiveGoal(userId);
 
-      // 1. CHECK: Does the user already have an active goal?
-      const { data: existingGoal } = await supabase
-        .from("goals")
-        .select("id")
-        .eq("user_id", userId)
-        .in("status", ["active", "in_progress"])
-        .maybeSingle();
-
-      if (!existingGoal) {
-        // 🅰️ CASE A: NO GOAL -> Create one
-        console.log("✨ No active goal found. Creating new goal...");
-        const { error } = await supabase
-          .from('goals')
-          .insert([
-            { 
-              user_id: userId, 
-              title: userQuery, 
-              status: 'in_progress' 
-            }
-          ]);
-        if (error) throw error;
-
-      } else {
-        // 🅱️ CASE B: GOAL EXISTS -> Treat input as instruction/feedback
-        console.log("🗣️ Active goal exists. Adding input to memory...");
-        const { error } = await supabase
-          .from('agent_memory')
-          .insert([
-            {
-              user_id: userId,
-              memory_type: 'user_instruction', // Agent will read this
-              content: userQuery
-            }
-          ]);
-        if (error) throw error;
-      }
+    // A. No open goal: the user's message becomes the new goal, and the
+    //    smart model writes its first tasks.
+    if (!existingGoal && userQuery) {
+      console.log(`✨ No active goal. Starting new goal: "${userQuery}"`);
+      const { message } = await startNewGoal(userId, userQuery);
+      return res.json({
+        success: true,
+        result: {
+          decision: { type: "CREATE_TASKS", message },
+          actionResult: { action: "GOAL_STARTED", message },
+        },
+      });
     }
 
-    // 2. RUN THE AGENT LOOP
-    const result = await runAgentLoop(userId);
-    res.json({ success: true, result });
+    // B. Open goal: save the message as an instruction, then run the loop.
+    if (userQuery) {
+      console.log(`📝 Received User Command: "${userQuery}"`);
+      const { error } = await supabase.from("agent_memory").insert([
+        { user_id: userId, memory_type: "user_instruction", content: userQuery },
+      ]);
+      if (error) throw error;
+    }
 
+    const result = await runAgentLoop(userId, userQuery);
+    res.json({ success: true, result });
   } catch (error) {
     console.error("Agent Error:", error);
     res.status(500).json({ success: false, error: error.message });

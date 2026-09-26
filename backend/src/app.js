@@ -11,6 +11,7 @@ app.use(cors());
 app.use(express.json()); // 👈 Your routes must go BELOW this line
 
 app.use("/tasks", require("./routes/taskRoutes"));
+app.use("/goals", require("./routes/goalRoutes"));
 
 // 👇 2. Add the new route here
 // This creates: http://localhost:4000/notifications/daily-reminders

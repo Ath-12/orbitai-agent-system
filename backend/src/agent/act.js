@@ -1,17 +1,26 @@
 // backend/src/agent/act.js
 const supabase = require("../services/supabaseClient");
+const { getActiveGoal } = require("../services/goalService");
+
+// Highest-priority pending task of a goal. Sorted in code because sorting the
+// text "high/medium/low" in the database puts "medium" first.
+async function topPendingTask(goalId) {
+  const { data } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("goal_id", goalId)
+    .eq("status", "pending");
+  const rank = { high: 0, medium: 1, low: 2 };
+  const sorted = (data || []).sort((a, b) => (rank[a.priority] ?? 3) - (rank[b.priority] ?? 3));
+  return sorted[0] || null;
+}
 
 async function act(userId, decision) {
   try {
     console.log(`⚡ Act Phase: ${decision.type}`);
     
     // 1. Get Goal Context (Reusable)
-    const { data: activeGoal } = await supabase
-      .from("goals")
-      .select("id")
-      .eq("user_id", userId)
-      .in("status", ["active", "in_progress"])
-      .maybeSingle();
+    const activeGoal = await getActiveGoal(userId);
 // =========================================================
     // 🆕 CASE: REPLY ONLY (Guardrails)
     // =========================================================
@@ -51,14 +60,7 @@ async function act(userId, decision) {
       let targetTaskId = decision.task?.id;
 
       if (!targetTaskId) {
-        const { data: topTask } = await supabase
-          .from("tasks")
-          .select("id")
-          .eq("goal_id", activeGoal.id)
-          .eq("status", "pending")
-          .order("priority", { ascending: false }) // Get the hardest one
-          .limit(1)
-          .single();
+        const topTask = activeGoal ? await topPendingTask(activeGoal.id) : null;
         if (topTask) targetTaskId = topTask.id;
       }
 
@@ -116,14 +118,7 @@ async function act(userId, decision) {
     if (decision.type === "NEXT_TASK" && activeGoal) {
        // ... (Keep your existing NEXT_TASK logic here) ...
        // I'm skipping pasting the whole block to save space, but KEEP IT!
-       const { data: task } = await supabase
-         .from("tasks")
-         .select("*")
-         .eq("goal_id", activeGoal.id)
-         .eq("status", "pending")
-         .order("priority", { ascending: false })
-         .limit(1)
-         .maybeSingle();
+       const task = await topPendingTask(activeGoal.id);
 
        if (task) {
          return {

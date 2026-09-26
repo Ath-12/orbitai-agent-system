@@ -6,13 +6,13 @@ const { runAgent } = require("../agent");
  * Service to handle the Agent execution loop.
  * This separates the "HTTP" part (Controller) from the "Logic" part (Service).
  */
-const runAgentLoop = async (userId) => {
+const runAgentLoop = async (userId, userQuery = "") => {
   console.log(`🔄 Service: Starting Agent Loop for ${userId}...`);
   
   try {
     // Call your existing agent logic
     // We pass "manual" because this is triggered by the UI button
-    const result = await runAgent(userId, "manual");
+    const result = await runAgent(userId, "manual", userQuery);
     
     return result;
   } catch (error) {

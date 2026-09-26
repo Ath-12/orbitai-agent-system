@@ -9,7 +9,8 @@ const triggerDailyReminders = async (req, res) => {
     const { data: activeGoals, error: goalsError } = await supabase
       .from('goals')
       .select('id, user_id')
-      .in('status', ['active', 'in_progress']); // Only check active goals
+      .in('status', ['active', 'in_progress'])
+      .is('ended_at', null); // Only goals that haven't been completed or replaced
 
     if (goalsError) throw goalsError;
 

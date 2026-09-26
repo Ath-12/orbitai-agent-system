@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Target, ListTodo, Brain, Bot,
   Play, CheckCircle2, ArrowLeft, Hexagon, Zap, Activity, Send,
-  Bell, CalendarClock // <--- Added icons for Reminders
+  Bell, CalendarClock, // <--- Added icons for Reminders
+  Plus, Flag, History, Trophy, X
 } from "lucide-react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -16,10 +17,21 @@ interface Task {
   id: string; title: string; priority: "high" | "medium" | "low"; status: string; due_date?: string;
 }
 
+// Pull the server's error text out of a failed request, if there is one.
+const errorText = (err: unknown, fallback: string) =>
+  (err as { response?: { data?: { error?: string } } })?.response?.data?.error || fallback;
+
+interface Progress { done: number; total: number; percent: number; }
+
+interface PastGoal {
+  id: string; title: string; outcome: "completed" | "replaced"; ended_at: string; done: number; total: number;
+}
+
 // ✅ Updated Interface to include Reminders
 interface AgentState {
-  userGoal: { title: string; status: string } | null;
+  userGoal: { id: string; title: string; status: string } | null;
   activeTasks: Task[];
+  progress?: Progress;
   activeReminders: { id: string; message: string; remind_at: string }[]; // <--- NEW
   recentMemory: { content: string }[];
 }
@@ -32,8 +44,21 @@ export default function DashboardPage() {
   const [input, setInput] = useState("");
   const [viewMode, setViewMode] = useState<"focus" | "all">("all");
   const [user, setUser] = useState<any>(null);
+  const [history, setHistory] = useState<PastGoal[]>([]);
+  const [showNewGoal, setShowNewGoal] = useState(false);
+  const [newGoalTitle, setNewGoalTitle] = useState("");
+  const [goalBusy, setGoalBusy] = useState(false);
   const router = useRouter();
   const supabase = createSupabaseClient();
+
+  const fetchHistory = async () => {
+    try {
+      const res = await api.get("/goals/history");
+      setHistory(res.data.history || []);
+    } catch (err) {
+      console.error("Failed to load goal history", err);
+    }
+  };
 
   useEffect(() => {
     const checkUser = async () => {
@@ -42,6 +67,7 @@ export default function DashboardPage() {
       else {
         setUser(user);
         fetchState(user.id);
+        fetchHistory();
       }
     };
     checkUser();
@@ -56,6 +82,41 @@ export default function DashboardPage() {
       setState({ userGoal: null, activeTasks: [], activeReminders: [], recentMemory: [] });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Start a new goal. The current one (if any) is saved in history as "replaced".
+  const handleStartNewGoal = async () => {
+    const title = newGoalTitle.trim();
+    if (!user || !title) return;
+    setGoalBusy(true);
+    setLastMessage(null);
+    try {
+      const res = await api.post("/goals", { title });
+      setLastMessage(res.data.message);
+      setNewGoalTitle("");
+      setShowNewGoal(false);
+      await Promise.all([fetchState(user.id), fetchHistory()]);
+    } catch (err) {
+      setLastMessage(`⚠️ ${errorText(err, "Couldn't start the new goal.")}`);
+    } finally {
+      setGoalBusy(false);
+    }
+  };
+
+  // Finish the current goal by hand, even if some tasks are left.
+  const handleCompleteGoal = async () => {
+    if (!user || !state?.userGoal) return;
+    if (!window.confirm(`Mark "${state.userGoal.title}" as completed and move it to your history?`)) return;
+    setGoalBusy(true);
+    try {
+      await api.post("/goals/current/complete");
+      setLastMessage("🎉 Goal completed! Type your next goal in the box below.");
+      await Promise.all([fetchState(user.id), fetchHistory()]);
+    } catch (err) {
+      setLastMessage(`⚠️ ${errorText(err, "Couldn't complete the goal.")}`);
+    } finally {
+      setGoalBusy(false);
     }
   };
 
@@ -80,8 +141,17 @@ export default function DashboardPage() {
   const handleCompleteTask = async (taskId: string) => {
     if (!user) return;
     setState(prev => prev ? ({ ...prev, activeTasks: prev.activeTasks.filter(t => t.id !== taskId) }) : null);
-    try { await api.post(`/tasks/${taskId}/complete`, { userId: user.id }); } 
-    catch (err) { fetchState(user.id); }
+    try {
+      const res = await api.post(`/tasks/${taskId}/complete`, { userId: user.id });
+      if (res.data.goalCompleted) {
+        setLastMessage("🎉 That was the last task. Goal completed! Type your next goal in the box below.");
+        fetchHistory();
+      }
+    } catch (err) {
+      console.error("Failed to complete task", err);
+    } finally {
+      fetchState(user.id); // refresh the list and the progress bar
+    }
   };
 
   // FILTER LOGIC
@@ -127,7 +197,55 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2 text-sm font-bold text-primary uppercase tracking-widest"><Target className="h-5 w-5" /> Current Objective</div>
             {state?.userGoal && <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase"><Activity className="h-3 w-3" /> {state.userGoal.status}</span>}
           </div>
-          {state?.userGoal ? <h1 className="text-3xl font-extrabold">{state.userGoal.title}</h1> : <h2 className="text-2xl font-bold text-muted-foreground">No active goal.</h2>}
+          {state?.userGoal ? <h1 className="text-3xl font-extrabold">{state.userGoal.title}</h1> : <h2 className="text-2xl font-bold text-muted-foreground">No active goal. Type your next goal in the box below.</h2>}
+
+          {/* PROGRESS BAR */}
+          {state?.userGoal && state.progress && state.progress.total > 0 && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between text-sm mb-2">
+                <span className="font-semibold text-muted-foreground">{state.progress.done} of {state.progress.total} tasks done</span>
+                <span className="font-bold text-primary tabular-nums">{state.progress.percent}%</span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-secondary overflow-hidden" role="progressbar" aria-valuenow={state.progress.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Goal progress">
+                <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${state.progress.percent}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* GOAL ACTIONS */}
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            {state?.userGoal && (
+              <button onClick={handleCompleteGoal} disabled={goalBusy} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                <Flag className="h-4 w-4" /> Complete goal
+              </button>
+            )}
+            {!showNewGoal && (
+              <button onClick={() => setShowNewGoal(true)} disabled={goalBusy} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold bg-secondary hover:bg-secondary/70 transition-colors disabled:opacity-50">
+                <Plus className="h-4 w-4" /> New goal
+              </button>
+            )}
+          </div>
+
+          {showNewGoal && (
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
+              <input
+                id="new-goal-title" type="text" value={newGoalTitle} autoFocus maxLength={200}
+                onChange={(e) => setNewGoalTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleStartNewGoal()}
+                placeholder="What do you want to achieve next?"
+                className="flex-1 rounded-lg border border-border bg-background px-4 py-2 outline-none focus:border-primary"
+              />
+              <button onClick={handleStartNewGoal} disabled={goalBusy || !newGoalTitle.trim()} className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold bg-primary text-primary-foreground disabled:opacity-50">
+                {goalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />} Start goal
+              </button>
+              <button onClick={() => { setShowNewGoal(false); setNewGoalTitle(""); }} className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-bold hover:bg-secondary" aria-label="Cancel">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {showNewGoal && state?.userGoal && (
+            <p className="mt-2 text-xs text-muted-foreground">Your current goal will be saved in history as “Replaced”.</p>
+          )}
         </section>
 
         {/* MAIN GRID */}
@@ -197,7 +315,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ✅ NEW: REMINDERS SECTION */}
-        <section className="mb-24 glass-panel p-8 rounded-3xl border border-border/40">
+        <section className="mb-8 glass-panel p-8 rounded-3xl border border-border/40">
            <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
                 <Bell className="h-5 w-5" />
@@ -226,12 +344,40 @@ export default function DashboardPage() {
            </div>
         </section>
 
+        {/* GOAL HISTORY */}
+        <section className="mb-24 glass-panel p-8 rounded-3xl border border-border/40">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-secondary rounded-lg"><History className="h-5 w-5" /></div>
+            <h2 className="text-xl font-bold">Goal History</h2>
+          </div>
+          {history.length === 0 ? (
+            <p className="py-6 text-center text-muted-foreground text-sm">Finished and replaced goals will appear here.</p>
+          ) : (
+            <div className="space-y-3">
+              {history.map((g) => (
+                <div key={g.id} className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-secondary/20 border border-border/50">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {g.outcome === "completed" ? <Trophy className="h-5 w-5 text-green-600 shrink-0" /> : <History className="h-5 w-5 text-muted-foreground shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{g.title}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(g.ended_at).toLocaleDateString()} · {g.done} of {g.total} tasks done</p>
+                    </div>
+                  </div>
+                  <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${g.outcome === "completed" ? "bg-green-500/10 text-green-600" : "bg-secondary text-muted-foreground"}`}>
+                    {g.outcome}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* INPUT BAR */}
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-50">
           <div className="glass-panel p-2 rounded-full shadow-2xl flex items-center gap-2 pl-6">
             <input 
               type="text" value={input} onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask OrbitAI to create a task, reschedule, or set a reminder..." 
+              placeholder={state?.userGoal ? "Ask OrbitAI to create a task, reschedule, or set a reminder..." : "Type your next goal, e.g. Learn Python in 30 days"}
               className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground font-medium"
               onKeyDown={(e) => e.key === 'Enter' && handleRunAgent()}
             />

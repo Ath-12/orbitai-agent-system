@@ -3,7 +3,7 @@ const think = require("./think");
 const act = require("./act");
 const remember = require("./remember");
 
-async function runAgent(userId, runType = "manual") {
+async function runAgent(userId, runType = "manual", userQuery = "") {
   try {
     console.log(`\n🤖 Agent Active for User: ${userId}`);
     
@@ -11,7 +11,7 @@ async function runAgent(userId, runType = "manual") {
     const state = await observe(userId);
     
     // 2. Think
-    const decision = await think(state);
+    const decision = await think(state, userQuery);
     console.log(`💡 Decision: ${decision.type}`);
 
     // 3. Act

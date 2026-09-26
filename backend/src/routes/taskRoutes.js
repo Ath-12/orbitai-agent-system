@@ -4,6 +4,7 @@ const router = express.Router();
 const supabaseClient = require("../services/supabaseClient");
 const supabase = supabaseClient.supabase || supabaseClient;
 const requireUser = require("../middleware/requireUser");
+const { getProgress, endGoal } = require("../services/goalService");
 
 /**
  * Complete a task
@@ -25,8 +26,12 @@ router.post("/:taskId/complete", requireUser, async (req, res) => {
         id,
         title,
         status,
+        goal_id,
         goal:goals (
-          user_id
+          id,
+          title,
+          user_id,
+          ended_at
         )
       `)
       .eq("id", taskId)
@@ -58,9 +63,24 @@ router.post("/:taskId/complete", requireUser, async (req, res) => {
       created_at: new Date().toISOString()
     });
 
+    // ✅ If that was the last task, the goal is finished: move it to history.
+    const progress = await getProgress(task.goal_id);
+    let goalCompleted = false;
+    if (progress.total > 0 && progress.done === progress.total && !task.goal.ended_at) {
+      await endGoal(task.goal_id, "completed");
+      await supabase.from("agent_memory").insert({
+        user_id: userId,
+        memory_type: "goal_completed",
+        content: `Completed goal: "${task.goal.title}"`,
+      });
+      goalCompleted = true;
+    }
+
     res.json({
       success: true,
-      message: `Task "${task.title}" marked as complete.`
+      message: `Task "${task.title}" marked as complete.`,
+      progress,
+      goalCompleted,
     });
 
   } catch (err) {
